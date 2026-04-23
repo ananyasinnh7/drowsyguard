@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>DrowsyGuard — Live Monitor</title>
+<style>
+/* ─── VARS & RESET ─────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0A0E0D;--bg2:#0F1412;--bg3:#141C1A;
+  --surface:#1A2320;--surface2:#202C29;
+  --green:#00C68A;--green-dark:#009E6E;--gdim:rgba(0,198,138,.12);
+  --amber:#FFAA00;--adim:rgba(255,170,0,.12);
+  --red:#FF4D4D;--rdim:rgba(255,77,77,.12);
+  --border:rgba(255,255,255,.07);--border2:rgba(0,198,138,.25);
+  --text:#E8F0EE;--text2:#8AA39D;--text3:#4D6660;
+  --font:'Segoe UI',system-ui,sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow-x:hidden;}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:var(--green-dark);}
+
+/* ─── NAV ──────────────────────────────────────────────────────────── */
+nav{display:flex;align-items:center;justify-content:space-between;padding:11px 24px;
+    border-bottom:1px solid var(--border);background:rgba(10,14,13,.95);
+    position:sticky;top:0;z-index:200;backdrop-filter:blur(12px);}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;}
+.logo-icon{width:28px;height:28px;background:var(--green);border-radius:7px;
+           display:flex;align-items:center;justify-content:center;}
+.logo-icon svg{width:16px;height:16px;}
+.nav-mid{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);}
+.pip{width:8px;height:8px;border-radius:50%;background:var(--text3);}
+.pip.on{background:var(--red);animation:blink 1.1s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+.nav-r{display:flex;gap:8px;}
+.btn{padding:7px 15px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;
+     border:none;font-family:var(--font);transition:all .18s;display:inline-flex;align-items:center;gap:6px;}
+.btn svg{width:13px;height:13px;flex-shrink:0;}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text);}
+.btn-green{background:var(--green);color:#000;font-weight:600;}
+.btn-green:hover{background:var(--green-dark);}
+.btn-red{background:var(--red);color:#fff;font-weight:600;}
+.btn-amber{background:var(--amber);color:#000;font-weight:600;}
+.btn:disabled{opacity:.38;cursor:not-allowed;pointer-events:none;}
+
+/* ─── LAYOUT ───────────────────────────────────────────────────────── */
+.app{display:grid;grid-template-columns:1fr 340px;min-height:calc(100vh - 52px);}
+.main{padding:18px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:14px;}
+.side{padding:18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:calc(100vh - 52px);}
+
+/* ─── VIDEO FEED ───────────────────────────────────────────────────── */
+.vid-wrap{position:relative;background:var(--bg3);border-radius:13px;
+          border:1px solid var(--border);overflow:hidden;aspect-ratio:16/9;}
+#feedImg{width:100%;height:100%;object-fit:cover;display:block;}
+.vid-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;
+                  align-items:center;justify-content:center;gap:10px;color:var(--text3);}
+.vid-placeholder svg{opacity:.35;}
+.vid-placeholder p{font-size:14px;}
+.cam-badge{position:absolute;top:11px;left:11px;background:rgba(0,0,0,.75);
+           border:1px solid var(--border2);border-radius:6px;padding:4px 10px;
+           font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px;}
+.cam-fps{position:absolute;top:11px;right:11px;background:rgba(0,0,0,.7);
+         border-radius:5px;padding:4px 9px;font-size:11px;color:var(--text2);}
+.fatigue-overlay{position:absolute;bottom:0;left:0;right:0;padding:11px 15px;
+                 background:linear-gradient(transparent,rgba(0,0,0,.85));
+                 display:flex;align-items:center;justify-content:space-between;}
+.fat-lbl{font-size:12px;color:var(--text2);}
+.fat-bar-bg{flex:1;margin:0 11px;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;}
+.fat-bar-fill{height:100%;border-radius:3px;transition:width .7s ease,background .4s;}
+#fatScore{font-size:19px;font-weight:700;min-width:36px;text-align:right;transition:color .4s;}
+
+/* ─── ALERT BANNER ──────────────────────────────────────────────────── */
+.alert-banner{border-radius:10px;padding:11px 15px;display:flex;align-items:center;gap:11px;border:1px solid;}
+.ab-normal  {background:var(--gdim);border-color:var(--border2);color:var(--green);}
+.ab-mild    {background:var(--adim);border-color:rgba(255,170,0,.4);color:var(--amber);}
+.ab-moderate{background:rgba(255,120,0,.12);border-color:rgba(255,120,0,.4);color:#FF7800;}
+.ab-critical{background:var(--rdim);border-color:rgba(255,77,77,.4);color:var(--red);}
+.ab-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ab-normal .ab-icon{background:var(--green);}
+.ab-mild .ab-icon{background:var(--amber);}
+.ab-moderate .ab-icon{background:#FF7800;}
+.ab-critical .ab-icon{background:var(--red);animation:shake .25s infinite;}
+@keyframes shake{0%,100%{transform:translateX(0);}30%{transform:translateX(-3px);}70%{transform:translateX(3px);}}
+.ab-text h4{font-size:14px;font-weight:600;margin-bottom:2px;}
+.ab-text p{font-size:12px;opacity:.82;}
+
+/* ─── METRICS GRID ──────────────────────────────────────────────────── */
+.met-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
+.met-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.met-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
+.met-name{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;}
+.met-val{font-size:18px;font-weight:700;transition:color .4s;}
+.met-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+.met-bar{height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;}
+.met-bar-fill{height:100%;border-radius:2px;transition:width .7s ease,background .4s;}
+
+/* ─── CNN / ANN EXPLAINER ───────────────────────────────────────────── */
+.explain-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.explain-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.ex-title{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--green);
+          font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:5px;}
+.ex-title svg{width:11px;height:11px;}
+.ex-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px;}
+.ex-label{font-size:11px;color:var(--text2);flex-shrink:0;min-width:70px;}
+.ex-bar-bg{flex:1;height:5px;background:var(--surface2);border-radius:2px;overflow:hidden;}
+.ex-bar-fill{height:100%;border-radius:2px;transition:width .7s ease;}
+.ex-val{font-size:11px;color:var(--green);min-width:28px;text-align:right;}
+
+/* ─── CONTROLS ──────────────────────────────────────────────────────── */
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+.ctrl-grid .btn{padding:10px;font-size:12px;border-radius:8px;justify-content:center;}
+
+/* ─── SIDE PANELS ───────────────────────────────────────────────────── */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:15px;}
+.panel-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--green);
+             font-weight:600;margin-bottom:11px;display:flex;align-items:center;gap:5px;}
+.panel-title svg{width:11px;height:11px;}
+
+/* ─── SESSION STATS ─────────────────────────────────────────────────── */
+.stats-3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
+.stat-box{background:var(--surface);border-radius:8px;padding:9px;text-align:center;}
+.s-num{font-size:18px;font-weight:700;color:var(--green);}
+.s-lbl{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* ─── ALERT LEVEL INDICATORS ────────────────────────────────────────── */
+.lv-list{display:flex;flex-direction:column;gap:5px;}
+.lv-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;
+         background:var(--surface);border:1px solid var(--border);transition:all .3s;}
+.lv-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.lv-text{font-size:12px;color:var(--text2);}
+.lv-item.active .lv-text{color:var(--text);font-weight:600;}
+
+/* ─── SETTINGS ──────────────────────────────────────────────────────── */
+.set-row{display:flex;align-items:center;justify-content:space-between;
+         padding:7px 0;border-bottom:1px solid var(--border);}
+.set-row:last-child{border-bottom:none;}
+.set-lbl{font-size:13px;}
+.set-sub{font-size:10px;color:var(--text3);}
+.tog{width:36px;height:20px;border-radius:10px;background:var(--surface2);
+     border:none;cursor:pointer;position:relative;transition:background .2s;}
+.tog::after{content:'';width:14px;height:14px;border-radius:50%;background:#fff;
+            position:absolute;top:3px;left:3px;transition:transform .2s;}
+.tog.on{background:var(--green);}
+.tog.on::after{transform:translateX(16px);}
+.rng{width:100%;accent-color:var(--green);margin-top:4px;}
+
+/* ─── LOG ───────────────────────────────────────────────────────────── */
+.log-wrap{max-height:180px;overflow-y:auto;}
+.log-item{display:flex;align-items:flex-start;gap:7px;padding:5px 0;
+          border-bottom:1px solid var(--border);font-size:11px;}
+.log-item:last-child{border-bottom:none;}
+.log-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+.log-time{color:var(--text3);min-width:42px;}
+.log-msg{color:var(--text2);}
+.log-empty{font-size:12px;color:var(--text3);text-align:center;padding:14px 0;}
+
+/* ─── MODAL ─────────────────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;
+         display:none;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:15px;
+       padding:26px;max-width:420px;width:90%;}
+.modal h3{font-size:17px;font-weight:700;margin-bottom:8px;}
+.modal p{font-size:14px;color:var(--text2);margin-bottom:18px;line-height:1.6;}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+
+@media(max-width:860px){
+  .app{grid-template-columns:1fr;}
+  .side{max-height:none;border-top:1px solid var(--border);}
+  .met-grid{grid-template-columns:repeat(2,1fr);}
+  .explain-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ NAV ═════════════════════════════════════════════════════════════ -->
+<nav>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+        <circle cx="12" cy="10" r="4"/>
+        <path d="M2 10s4-7 10-7 10 7 10 7-4 7-10 7S2 10 2 10z"/>
+        <circle cx="12" cy="10" r="1.5" fill="#000" stroke="none"/>
+      </svg>
+    </div>
+    DrowsyGuard
+  </div>
+  <div class="nav-mid">
+    <div class="pip" id="livePip"></div>
+    <span id="liveText">Camera off</span>
+    <span style="color:var(--text3);font-size:11px;" id="faceTag"></span>
+  </div>
+  <div class="nav-r">
+    <button class="btn btn-ghost" onclick="showModal('help')">Help</button>
+    <button class="btn btn-ghost" onclick="exportLog()">Export Log</button>
+    <button class="btn btn-green" id="mainBtn" onclick="startCamera()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Start Camera
+    </button>
+  </div>
+</nav>
+
+<!-- ═══ APP ══════════════════════════════════════════════════════════════ -->
+<div class="app">
+
+  <!-- ── MAIN COLUMN ───────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Video feed (served from Python backend) -->
+    <div class="vid-wrap">
+      <img id="feedImg" style="display:none;"/>
+      <div class="cam-badge"><div class="pip" id="recPip"></div><span id="camLbl">READY</span></div>
+      <div class="cam-fps" id="fpsLbl">— fps</div>
+      <div class="fatigue-overlay">
+        <span class="fat-lbl">Fatigue</span>
+        <div class="fat-bar-bg"><div class="fat-bar-fill" id="fatBar" style="width:0%;background:var(--green);"></div></div>
+        <span id="fatScore" style="color:var(--green);">0</span>
+      </div>
+      <div class="vid-placeholder" id="vidPh">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <p>Click <b>Start Camera</b> to begin live monitoring</p>
+        <p style="font-size:12px;margin-top:4px;">Requires Python backend running on localhost:5000</p>
+      </div>
+    </div>
+
+    <!-- Alert Banner -->
+    <div class="alert-banner ab-normal" id="alertBanner">
+      <div class="ab-icon" id="abIcon">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="ab-text">
+        <h4 id="abTitle">System Ready</h4>
+        <p  id="abDesc">Start the camera to begin real-time drowsiness monitoring</p>
+      </div>
+    </div>
+
+    <!-- 6 Metrics -->
+    <div class="met-grid">
+      <div class="met-card">
+        <div class="met-top">
+          <div><div class="met-name">EAR</div><div class="met-sub">Eye aspect ratio</div></div>
+          <div class="met-val" id="mEAR" style="color:var(--green);">—</div>
+        </div>
+        <div class="met-bar"><div class="met-bar-fill" id="bEAR" style="width:0%;background:var(--green);"></div></div>
+      </div>
+      <div class="met-card">
+        <div class="met-top">
+          <div><div class="met-name">PERCLOS</div><div class="met-sub">Eye closure %</div></div>
+          <div class="met-val" id="mPERC" style="color:var(--green);">—</div>
+        </div>
+        <div class="met-bar"><div class="met-bar-fill" id="bPERC" style="width:0%;background:var(--green);"></div></div>
+      </div>
+      <div class="met-card">
+        <div class="met-top">
+          <div><div class="met-name">Blink Rate</div><div class="met-sub">Per minute</div></div>
+          <div class="met-val" id="mBLINK" style="color:var(--green);">—</div>
+        </div>
+        <div class="met-bar"><div class="met-bar-fill" id="bBLINK" style="width:0%;background:var(--green);"></div></div>
+      </div>
+      <div class="met-card">
+        <div class="met-top">
+          <div><div class="met-name">Head Pitch</div><div class="met-sub">Nod angle</div></div>
+          <div class="met-val" id="mPITCH" style="color:var(--green);">—</div>
+        </div>
+        <div class="met-bar"><div class="met-bar-fill" id="bPITCH" style="width:0%;background:var(--green);"></div></div>
+      </div>
+      <div class="met-card">
+        <div class="met-top">
+          <div><div class="met-name">Head Yaw</div><div class="met-sub">Turn angle</div></div>
+          <div class="met-val" id="mYAW" style="color:var(--green);">—</div>
+        </div>
+        <div class="met-bar"><div class="met-bar-fill" id="bYAW" style="width:0%;background:var(--green);"></div></div>
+      </div>
+      <div class="met-card">
+        <div class="met-top">
+          <div><div class="met-name">CNN Prob</div><div class="met-sub">Eye closed %</div></div>
+          <div class="met-val" id="mCNN" style="color:var(--green);">—</div>
+        </div>
+        <div class="met-bar"><div class="met-bar-fill" id="bCNN" style="width:0%;background:var(--green);"></div></div>
+      </div>
+    </div>
+
+    <!-- CNN + ANN Explainer -->
+    <div class="explain-grid">
+      <div class="explain-card">
+        <div class="ex-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          CNN — Eye Classifier
+        </div>
+        <div class="ex-row">
+          <span class="ex-label">Left eye</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="cnnLBar" style="width:20%;background:var(--green);"></div></div>
+          <span class="ex-val" id="cnnLVal">—</span>
+        </div>
+        <div class="ex-row">
+          <span class="ex-label">Right eye</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="cnnRBar" style="width:20%;background:var(--green);"></div></div>
+          <span class="ex-val" id="cnnRVal">—</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px;" id="cnnMode">Mode: geometric fallback</div>
+      </div>
+      <div class="explain-card">
+        <div class="ex-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          ANN — Score Breakdown
+        </div>
+        <div class="ex-row">
+          <span class="ex-label">EAR</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="annEAR" style="width:0%;background:var(--green);"></div></div>
+          <span class="ex-val" id="annEARv">0</span>
+        </div>
+        <div class="ex-row">
+          <span class="ex-label">PERCLOS</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="annPERC" style="width:0%;background:var(--green);"></div></div>
+          <span class="ex-val" id="annPERCv">0</span>
+        </div>
+        <div class="ex-row">
+          <span class="ex-label">Head pose</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="annHEAD" style="width:0%;background:var(--green);"></div></div>
+          <span class="ex-val" id="annHEADv">0</span>
+        </div>
+        <div class="ex-row">
+          <span class="ex-label">Blink rate</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="annBLINK" style="width:0%;background:var(--green);"></div></div>
+          <span class="ex-val" id="annBLINKv">0</span>
+        </div>
+        <div class="ex-row" style="margin-bottom:0;">
+          <span class="ex-label">Yawn (MAR)</span>
+          <div class="ex-bar-bg"><div class="ex-bar-fill" id="annMAR" style="width:0%;background:var(--green);"></div></div>
+          <span class="ex-val" id="annMARv">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="ctrl-grid">
+      <button class="btn btn-green" id="startStopBtn" onclick="toggleCam()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Start
+      </button>
+      <button class="btn btn-ghost" id="pauseBtn" onclick="pauseCam()" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        Pause
+      </button>
+      <button class="btn btn-ghost" onclick="snapshot()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Snapshot
+      </button>
+      <button class="btn btn-ghost" onclick="resetSession()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+        Reset
+      </button>
+      <button class="btn btn-amber" onclick="testAlert()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>
+        Test Alert
+      </button>
+      <button class="btn btn-ghost" onclick="showModal('help')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
+      </button>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ── SIDE COLUMN ────────────────────────────────────────────────── -->
+  <div class="side">
+
+    <!-- Session Stats -->
+    <div class="panel">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Session Stats
+      </div>
+      <div class="stats-3">
+        <div class="stat-box"><div class="s-num" id="sesTime">00:00</div><div class="s-lbl">Duration</div></div>
+        <div class="stat-box"><div class="s-num" id="totAlerts">0</div><div class="s-lbl">Alerts</div></div>
+        <div class="stat-box"><div class="s-num" id="totBlinks">0</div><div class="s-lbl">Blinks</div></div>
+      </div>
+    </div>
+
+    <!-- Alert Levels -->
+    <div class="panel">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Alert Level
+      </div>
+      <div class="lv-list">
+        <div class="lv-item" id="lv0"><div class="lv-dot" style="background:var(--green)"></div><div class="lv-text">Normal — Driver alert</div></div>
+        <div class="lv-item" id="lv1"><div class="lv-dot" style="background:var(--amber)"></div><div class="lv-text">Mild fatigue</div></div>
+        <div class="lv-item" id="lv2"><div class="lv-dot" style="background:#FF7800"></div><div class="lv-text">Moderate drowsiness</div></div>
+        <div class="lv-item" id="lv3"><div class="lv-dot" style="background:var(--red)"></div><div class="lv-text">Critical / Microsleep</div></div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="panel">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Settings
+      </div>
+      <div class="set-row">
+        <div><div class="set-lbl">Overlay on frame</div><div class="set-sub">Landmarks + metrics drawn on video</div></div>
+        <button class="tog on" id="togOverlay" onclick="setSetting('overlay',this)"></button>
+      </div>
+      <div class="set-row">
+        <div><div class="set-lbl">Sound alerts</div><div class="set-sub">Browser audio alarm</div></div>
+        <button class="tog on" id="togSound" onclick="setSetting('sound',this)"></button>
+      </div>
+      <div class="set-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+        <div class="set-lbl">EAR threshold: <span id="earThrLbl" style="color:var(--green)">0.25</span></div>
+        <input type="range" class="rng" min="15" max="35" value="25" oninput="setEAR(this.value)"/>
+      </div>
+      <div class="set-row" style="flex-direction:column;align-items:flex-start;gap:5px;border-bottom:none;">
+        <div class="set-lbl">Sensitivity: <span id="sensLbl" style="color:var(--green)">Medium</span></div>
+        <input type="range" class="rng" min="1" max="3" value="2" oninput="setSens(this.value)"/>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="panel">
+      <div class="panel-title" style="justify-content:space-between;margin-bottom:8px;">
+        <span style="display:flex;align-items:center;gap:5px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Event Log
+        </span>
+        <button onclick="clearLog()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;">Clear</button>
+      </div>
+      <div class="log-wrap" id="logWrap"><div class="log-empty">No events yet</div></div>
+    </div>
+
+  </div><!-- /side -->
+</div>
+
+<!-- ═══ MODALS ════════════════════════════════════════════════════════════ -->
+<div class="overlay" id="modal-help">
+  <div class="modal">
+    <h3>How DrowsyGuard Works</h3>
+    <p>
+      <b>Backend (Python):</b> Flask server runs MediaPipe face detection + EAR + PERCLOS + Head Pose + CNN + ANN every frame. Results are sent to this page via HTTP polling.<br/><br/>
+      <b>CNN:</b> MobileNetV2 classifies each eye region (64×64 image) as open/closed. Gives a probability 0–1.<br/><br/>
+      <b>ANN:</b> Takes 6 features (EAR, PERCLOS, blink rate, pitch, yaw, MAR) → outputs a unified fatigue score 0–100.<br/><br/>
+      <b>Alert levels:</b> Determined by the ANN score with PERCLOS + consecutive-closed-frame overrides.<br/><br/>
+      <b>To use:</b> Run <code>python app.py</code> in your terminal, then open <code>http://localhost:5000</code>
+    </p>
+    <div class="modal-btns">
+      <button class="btn btn-green" onclick="hideModal('help')">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-critical">
+  <div class="modal">
+    <h3 style="color:var(--red);">⚠ Critical Drowsiness Detected!</h3>
+    <p>Severe fatigue has been detected by the AI system. <b>Pull over safely and rest immediately.</b> Continuing to drive is extremely dangerous.</p>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="hideModal('critical')">Dismiss</button>
+      <button class="btn btn-red"   onclick="hideModal('critical')">I will pull over</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+const S = {
+  running: false,
+  paused:  false,
+  sound:   true,
+  overlay: true,
+  sessionStart: null,
+  criticalShown: false,
+  pollInterval: null,
+  frameInterval: null,
+  timerInterval: null,
+  audioCtx: null,
+  audioInterval: null,
+  lastLevel: 0,
+  logEvents: [],
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  CAMERA CONTROL
+// ═══════════════════════════════════════════════════════════════
+async function startCamera() {
+  try {
+    const r = await fetch('/api/start', {method:'POST'});
+    const d = await r.json();
+    if (!d.ok) { addLog('error', d.msg); return; }
+
+    S.running = true;
+    S.paused  = false;
+    S.sessionStart = Date.now();
+    S.criticalShown = false;
+
+    document.getElementById('vidPh').style.display    = 'none';
+    document.getElementById('feedImg').style.display  = 'block';
+    document.getElementById('livePip').classList.add('on');
+    document.getElementById('recPip').classList.add('on');
+    document.getElementById('liveText').textContent   = 'Monitoring live';
+    document.getElementById('camLbl').textContent     = 'LIVE';
+
+    // Nav button → Stop
+    const nb = document.getElementById('mainBtn');
+    nb.className = 'btn btn-red';
+    nb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Stop Camera';
+    nb.onclick = stopCamera;
+
+    // Start/Stop ctrl button
+    const sb = document.getElementById('startStopBtn');
+    sb.className = 'btn btn-red';
+    sb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Stop';
+    document.getElementById('pauseBtn').disabled = false;
+
+    // Start polling
+    S.pollInterval  = setInterval(pollMetrics, 120);
+    S.frameInterval = setInterval(pollFrame,   120);
+    S.timerInterval = setInterval(updateTimer,  1000);
+
+    addLog('info', 'Session started');
+  } catch(e) {
+    addLog('error', 'Cannot reach Python backend — is app.py running?');
+    setAlert(0, 'Backend Not Found', 'Run: python app.py  then refresh this page');
+  }
+}
+
+async function stopCamera() {
+  await fetch('/api/stop', {method:'POST'}).catch(()=>{});
+
+  S.running = false;
+  clearInterval(S.pollInterval);
+  clearInterval(S.frameInterval);
+  clearInterval(S.timerInterval);
+  stopSound();
+
+  document.getElementById('feedImg').style.display  = 'none';
+  document.getElementById('vidPh').style.display    = 'flex';
+  document.getElementById('livePip').classList.remove('on');
+  document.getElementById('recPip').classList.remove('on');
+  document.getElementById('liveText').textContent   = 'Camera off';
+  document.getElementById('camLbl').textContent     = 'STOPPED';
+  document.getElementById('faceTag').textContent    = '';
+
+  const nb = document.getElementById('mainBtn');
+  nb.className = 'btn btn-green';
+  nb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Camera';
+  nb.onclick = startCamera;
+
+  const sb = document.getElementById('startStopBtn');
+  sb.className = 'btn btn-green';
+  sb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start';
+  document.getElementById('pauseBtn').disabled = true;
+
+  setAlert(0, 'Session Ended', 'Camera stopped. Press Start to resume.');
+  addLog('info', 'Session ended');
+}
+
+function toggleCam() { S.running ? stopCamera() : startCamera(); }
+
+async function pauseCam() {
+  const r = await fetch('/api/pause', {method:'POST'}).catch(()=>null);
+  if (!r) return;
+  const d = await r.json();
+  S.paused = d.paused;
+  const btn = document.getElementById('pauseBtn');
+  if (S.paused) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> Resume';
+    document.getElementById('camLbl').textContent = 'PAUSED';
+  } else {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+    document.getElementById('camLbl').textContent = 'LIVE';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  POLLING — fetch metrics from Python backend
+// ═══════════════════════════════════════════════════════════════
+async function pollMetrics() {
+  try {
+    const r = await fetch('/api/metrics');
+    const d = await r.json();
+    updateUI(d);
+  } catch(e) {/* backend offline */}
+}
+
+async function pollFrame() {
+  try {
+    const r = await fetch('/api/frame');
+    const d = await r.json();
+    if (d.frame) {
+      document.getElementById('feedImg').src = 'data:image/jpeg;base64,' + d.frame;
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UI UPDATE — called every poll cycle
+// ═══════════════════════════════════════════════════════════════
+function updateUI(d) {
+  const C = d.alert_color || '#00C68A';
+  const level = d.alert_level || 0;
+
+  // FPS
+  document.getElementById('fpsLbl').textContent = (d.fps || 0) + ' fps';
+
+  // Face detected
+  document.getElementById('faceTag').textContent = d.face_detected ? '● face' : '○ no face';
+
+  // Alert banner
+  setAlert(level, d.alert_name, d.alert_desc);
+
+  // Alert level list
+  updateLevels(level);
+
+  // Fatigue bar
+  document.getElementById('fatBar').style.width      = (d.fatigue_score || 0) + '%';
+  document.getElementById('fatBar').style.background = C;
+  document.getElementById('fatScore').textContent    = Math.round(d.fatigue_score || 0);
+  document.getElementById('fatScore').style.color    = C;
+
+  // Helper: update metric card
+  const setMet = (id, bId, val, label, pct, badThreshold, bad = false) => {
+    const el = document.getElementById(id);
+    const good = '#00C68A'; const warn = '#FFAA00'; const crit = '#FF4D4D';
+    const col = bad ? crit : (pct > badThreshold ? warn : good);
+    el.textContent   = label;
+    el.style.color   = col;
+    const b = document.getElementById(bId);
+    b.style.width      = Math.min(pct, 100) + '%';
+    b.style.background = col;
+  };
+
+  // EAR (lower = worse)
+  const earPct  = d.ear > 0 ? Math.min((d.ear / 0.4) * 100, 100) : 0;
+  setMet('mEAR',  'bEAR',  d.ear,  d.ear > 0 ? d.ear.toFixed(3) : '—', earPct, 70, d.ear > 0 && d.ear < 0.25);
+
+  // PERCLOS (higher = worse)
+  setMet('mPERC', 'bPERC', d.perclos, d.perclos > 0 ? d.perclos.toFixed(1)+'%' : '—', d.perclos||0, 35, d.perclos > 55);
+
+  // Blink rate
+  const bPct = Math.min((d.blink_rate / 40) * 100, 100);
+  setMet('mBLINK','bBLINK',d.blink_rate,d.blink_rate>0?d.blink_rate+'/min':'—',bPct,60,d.blink_rate>30);
+
+  // Head pitch
+  const pPct = Math.min(Math.abs(d.head_pitch||0) / 45 * 100, 100);
+  setMet('mPITCH','bPITCH',d.head_pitch,d.head_pitch!=null?d.head_pitch.toFixed(1)+'°':'—',pPct,40,Math.abs(d.head_pitch)>20);
+
+  // Head yaw
+  const yPct = Math.min(Math.abs(d.head_yaw||0) / 45 * 100, 100);
+  setMet('mYAW',  'bYAW',  d.head_yaw, d.head_yaw!=null?d.head_yaw.toFixed(1)+'°':'—',yPct,40,Math.abs(d.head_yaw)>20);
+
+  // CNN probability
+  const cPct = (d.cnn_prob||0) * 100;
+  setMet('mCNN',  'bCNN',  d.cnn_prob, d.cnn_prob!=null?(cPct.toFixed(0)+'%'):'—', cPct, 60, cPct > 70);
+
+  // ANN breakdown
+  if (d.breakdown && d.breakdown.total > 0) {
+    const total = d.breakdown.total || 1;
+    const pct = (val) => Math.min((val / total) * 100, 100).toFixed(0) + '%';
+    const brkd = d.breakdown;
+
+    document.getElementById('annEAR').style.width   = Math.min(brkd.ear/35*100,100)+'%';
+    document.getElementById('annEARv').textContent  = brkd.ear.toFixed(1);
+    document.getElementById('annPERC').style.width  = Math.min(brkd.perclos/30*100,100)+'%';
+    document.getElementById('annPERCv').textContent = brkd.perclos.toFixed(1);
+    document.getElementById('annHEAD').style.width  = Math.min(brkd.head_pose/15*100,100)+'%';
+    document.getElementById('annHEADv').textContent = brkd.head_pose.toFixed(1);
+    document.getElementById('annBLINK').style.width = Math.min(brkd.blink_rate/12*100,100)+'%';
+    document.getElementById('annBLINKv').textContent= brkd.blink_rate.toFixed(1);
+    document.getElementById('annMAR').style.width   = Math.min(brkd.yawn/8*100,100)+'%';
+    document.getElementById('annMARv').textContent  = brkd.yawn.toFixed(1);
+  }
+
+  // CNN bar (use cnn_prob as both eyes for display since Python averages)
+  const cnnV = ((d.cnn_prob||0)*100).toFixed(0)+'%';
+  document.getElementById('cnnLBar').style.width  = (d.cnn_prob||0)*100+'%';
+  document.getElementById('cnnLVal').textContent  = cnnV;
+  document.getElementById('cnnRBar').style.width  = (d.cnn_prob||0)*100+'%';
+  document.getElementById('cnnRVal').textContent  = cnnV;
+
+  // Session stats
+  document.getElementById('totAlerts').textContent = d.total_alerts || 0;
+  document.getElementById('totBlinks').textContent = d.total_blinks || 0;
+
+  // Alerts & sound
+  if (level > S.lastLevel) {
+    addLog(['info','warn','warn','error'][level], d.alert_name);
+    if (S.sound) playAlert(level);
+    if (level === 3 && !S.criticalShown) {
+      S.criticalShown = true;
+      showModal('critical');
+    }
+  } else if (level === 0 && S.lastLevel > 0) {
+    stopSound();
+    S.criticalShown = false;
+  }
+  S.lastLevel = level;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ALERT BANNER
+// ═══════════════════════════════════════════════════════════════
+const AB_CLASSES = ['ab-normal','ab-mild','ab-moderate','ab-critical'];
+const AB_ICONS   = [
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>',
+];
+
+function setAlert(level, title, desc) {
+  const banner = document.getElementById('alertBanner');
+  banner.className = 'alert-banner ' + AB_CLASSES[level];
+  document.getElementById('abIcon').innerHTML  = AB_ICONS[level];
+  document.getElementById('abTitle').textContent = title;
+  document.getElementById('abDesc').textContent  = desc;
+}
+
+function updateLevels(active) {
+  const dotColors = ['var(--green)','var(--amber)','#FF7800','var(--red)'];
+  const labels    = ['Normal — Driver alert','Mild fatigue','Moderate drowsiness','Critical / Microsleep'];
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('lv' + i);
+    if (i === active) {
+      el.classList.add('active');
+      el.style.background  = ['var(--gdim)','var(--adim)','rgba(255,120,0,.12)','var(--rdim)'][i];
+      el.style.borderColor = ['var(--border2)','rgba(255,170,0,.4)','rgba(255,120,0,.4)','rgba(255,77,77,.4)'][i];
+      el.querySelector('.lv-dot').style.animation = 'blink 1.1s infinite';
+    } else {
+      el.classList.remove('active');
+      el.style.background  = 'var(--surface)';
+      el.style.borderColor = 'var(--border)';
+      el.querySelector('.lv-dot').style.animation = '';
+    }
+    el.querySelector('.lv-text').textContent = labels[i] + (i === active ? ' ← Active' : '');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SOUND (Web Audio API)
+// ═══════════════════════════════════════════════════════════════
+function getACtx(){if(!S.audioCtx)S.audioCtx=new(window.AudioContext||window.webkitAudioContext)();return S.audioCtx;}
+function beep(f,d,v){
+  if(!S.sound)return;
+  try{const c=getACtx(),o=c.createOscillator(),g=c.createGain();
+  o.connect(g);g.connect(c.destination);o.frequency.value=f;o.type='sine';
+  g.gain.setValueAtTime(v,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+d);
+  o.start(c.currentTime);o.stop(c.currentTime+d);}catch(e){}}
+
+function playAlert(level){
+  stopSound();
+  const patterns=[null,
+    ()=>{beep(880,.3,.3);setTimeout(()=>beep(880,.3,.3),500);},
+    ()=>{for(let i=0;i<3;i++)setTimeout(()=>beep(1047,.2,.5),i*300);},
+    ()=>{for(let i=0;i<5;i++)setTimeout(()=>beep(1319+i%2*200,.15,.7),i*150);}
+  ];
+  const ivl=[0,4000,2500,1200];
+  if(level>0&&patterns[level]){patterns[level]();S.audioInterval=setInterval(patterns[level],ivl[level]);}
+}
+function stopSound(){if(S.audioInterval){clearInterval(S.audioInterval);S.audioInterval=null;}}
+
+// Test alert
+function testAlert(){
+  setAlert(2,'TEST — Moderate Alert','Testing the alert system');
+  updateLevels(2);
+  playAlert(2);
+  addLog('warn','Alert test triggered');
+  setTimeout(()=>{if(!S.running){setAlert(0,'Test complete','Alert working correctly');updateLevels(0);}stopSound();},3000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SNAPSHOT
+// ═══════════════════════════════════════════════════════════════
+async function snapshot() {
+  try {
+    const r = await fetch('/api/snapshot', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) { addLog('info','Snapshot saved: ' + d.path); }
+    else       { addLog('error', d.msg || 'Snapshot failed'); }
+  } catch(e){ addLog('error','Backend offline'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════════════════════════
+async function resetSession() {
+  await fetch('/api/reset',{method:'POST'}).catch(()=>{});
+  S.sessionStart   = Date.now();
+  S.criticalShown  = false;
+  S.lastLevel      = 0;
+  stopSound();
+  clearLog();
+  setAlert(0,'Session Reset','All metrics cleared.');
+  updateLevels(0);
+  addLog('info','Session reset');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════════════════════
+function setSetting(key, btn) {
+  btn.classList.toggle('on');
+  const val = btn.classList.contains('on');
+  if (key === 'overlay') { S.overlay = val; fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({show_overlay:val})}); }
+  if (key === 'sound')   { S.sound   = val; if (!val) stopSound(); }
+  addLog('info', key + ' ' + (val ? 'enabled' : 'disabled'));
+}
+
+function setEAR(v) {
+  const thr = v / 100;
+  document.getElementById('earThrLbl').textContent = thr.toFixed(2);
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ear_threshold:thr})}).catch(()=>{});
+}
+
+function setSens(v) {
+  const labels=['','Low','Medium','High'];
+  document.getElementById('sensLbl').textContent = labels[parseInt(v)];
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sensitivity:parseInt(v)})}).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TIMER
+// ═══════════════════════════════════════════════════════════════
+function updateTimer() {
+  if (!S.sessionStart) return;
+  const e = Math.floor((Date.now() - S.sessionStart) / 1000);
+  const m = Math.floor(e/60).toString().padStart(2,'0');
+  const s = (e%60).toString().padStart(2,'0');
+  document.getElementById('sesTime').textContent = m + ':' + s;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EVENT LOG
+// ═══════════════════════════════════════════════════════════════
+function addLog(type, msg) {
+  const wrap = document.getElementById('logWrap');
+  const empty = wrap.querySelector('.log-empty');
+  if (empty) empty.remove();
+
+  const cols = {info:'var(--green)',warn:'var(--amber)',error:'var(--red)'};
+  const now  = new Date();
+  const ts   = now.toTimeString().slice(0,8);
+  S.logEvents.push({type, msg, ts});
+
+  const el = document.createElement('div');
+  el.className = 'log-item';
+  el.innerHTML = `<div class="log-dot" style="background:${cols[type]||'var(--text3)'}"></div><div class="log-time">${ts}</div><div class="log-msg">${msg}</div>`;
+  wrap.insertBefore(el, wrap.firstChild);
+
+  const items = wrap.querySelectorAll('.log-item');
+  if (items.length > 60) items[items.length-1].remove();
+}
+
+function clearLog() {
+  document.getElementById('logWrap').innerHTML = '<div class="log-empty">No events yet</div>';
+  S.logEvents = [];
+}
+
+function exportLog() {
+  if (!S.logEvents.length) { alert('No events to export.'); return; }
+  let csv = 'Time,Type,Event\n';
+  S.logEvents.forEach(e => { csv += `"${e.ts}","${e.type}","${e.msg}"\n`; });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `drowsyguard_log_${Date.now()}.csv`;
+  a.click();
+  addLog('info','Log exported');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MODALS
+// ═══════════════════════════════════════════════════════════════
+function showModal(id){ document.getElementById('modal-'+id).classList.add('open'); }
+function hideModal(id){ document.getElementById('modal-'+id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target===el) el.classList.remove('open'); });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  // Check if backend is running
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    document.getElementById('cnnMode').textContent = 'Mode: ' + d.cnn;
+    addLog('info', 'Backend connected — ' + (d.mediapipe ? 'MediaPipe ready' : 'MediaPipe not installed'));
+  } catch(e) {
+    addLog('error', 'Python backend not found — run: python app.py');
+    setAlert(0, 'Backend Offline', 'Run python app.py in your terminal, then refresh');
+  }
+});
+</script>
+</body>
+</html>
